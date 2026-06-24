@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runCourtListenerIngest, runNewsIngest } from "@/lib/ingest-runners";
+import { runCourtListenerIngest, runNewsIngest, runRegulatorIngest } from "@/lib/ingest-runners";
 
 function isAuthorized(request) {
   const secret = process.env.CRON_SECRET;
@@ -17,14 +17,23 @@ export async function POST(request) {
   const body = await request.json().catch(() => ({}));
   const courtQuery = body.courtQuery || process.env.COURTLISTENER_QUERY || "Kalshi";
   const newsQuery = body.newsQuery || process.env.NEWS_RSS_QUERY || "Kalshi";
+  const regulatorQuery = body.regulatorQuery || process.env.REGULATOR_RSS_QUERY || "Kalshi";
 
-  const [courtResult, newsResult] = await Promise.allSettled([
+  const [courtResult, newsResult, regulatorResult] = await Promise.allSettled([
     runCourtListenerIngest({ query: courtQuery, limit: body.courtLimit || 10, results: body.courtResults }),
     runNewsIngest({ query: newsQuery, limit: body.newsLimit || 10, results: body.newsResults }),
+    runRegulatorIngest({
+      query: regulatorQuery,
+      limit: body.regulatorLimit || 10,
+      results: body.regulatorResults,
+    }),
   ]);
 
   const response = {
-    ok: courtResult.status === "fulfilled" || newsResult.status === "fulfilled",
+    ok:
+      courtResult.status === "fulfilled" ||
+      newsResult.status === "fulfilled" ||
+      regulatorResult.status === "fulfilled",
     court:
       courtResult.status === "fulfilled"
         ? courtResult.value
@@ -40,6 +49,14 @@ export async function POST(request) {
             ok: false,
             source: "news_rss",
             error: newsResult.reason?.message || "News ingest failed.",
+          },
+    regulator:
+      regulatorResult.status === "fulfilled"
+        ? regulatorResult.value
+        : {
+            ok: false,
+            source: "regulator_rss",
+            error: regulatorResult.reason?.message || "Regulator ingest failed.",
           },
   };
 

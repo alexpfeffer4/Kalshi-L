@@ -121,6 +121,7 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
   const [error, setError] = useState("");
   const [ingestQuery, setIngestQuery] = useState(runtimeStatus.defaultCourtListenerQuery || "Kalshi");
   const [newsQuery, setNewsQuery] = useState(runtimeStatus.defaultNewsQuery || "Kalshi");
+  const [regulatorQuery, setRegulatorQuery] = useState(runtimeStatus.defaultRegulatorQuery || "Kalshi");
   const [selectedRunId, setSelectedRunId] = useState(initialRuns[0]?.id || null);
   const [runOutcomeFilter, setRunOutcomeFilter] = useState("all");
   const [editForm, setEditForm] = useState({
@@ -944,6 +945,24 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                     Run News now
                   </button>
                 </form>
+                <form
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    await post("/api/ingest/regulator", { query: regulatorQuery });
+                  }}
+                >
+                  <div className="field">
+                    <label htmlFor="regulatorQuery">Regulator query</label>
+                    <input
+                      id="regulatorQuery"
+                      onChange={(event) => setRegulatorQuery(event.target.value)}
+                      value={regulatorQuery}
+                    />
+                  </div>
+                  <button className="action primary" disabled={isPending} type="submit">
+                    Run Regulator now
+                  </button>
+                </form>
                 <button
                   className="action primary"
                   disabled={isPending}
@@ -951,6 +970,7 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                     await post("/api/ingest/all", {
                       courtQuery: ingestQuery,
                       newsQuery,
+                      regulatorQuery,
                     });
                   }}
                   type="button"
