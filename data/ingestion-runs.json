@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1781905566026,
+    "source": "courtlistener",
+    "query": "Kalshi",
+    "status": "success",
+    "itemsSeen": 10,
+    "itemsCreated": 9,
+    "duplicatesCount": 1,
+    "startedAt": "2026-06-19T21:46:05.198Z",
+    "finishedAt": "2026-06-19T21:46:06.026Z"
+  },
+  {
+    "id": 1781905511136,
+    "source": "courtlistener",
+    "query": "Kalshi",
+    "status": "success",
+    "itemsSeen": 1,
+    "itemsCreated": 0,
+    "duplicatesCount": 1,
+    "startedAt": "2026-06-19T21:45:11.134Z",
+    "finishedAt": "2026-06-19T21:45:11.136Z"
+  },
+  {
+    "id": 1781905488805,
+    "source": "courtlistener",
+    "query": "Kalshi",
+    "status": "success",
+    "itemsSeen": 1,
+    "itemsCreated": 1,
+    "startedAt": "2026-06-19T21:44:48.803Z",
+    "finishedAt": "2026-06-19T21:44:48.805Z"
+  },
+  {
+    "id": 1781905138180,
+    "source": "courtlistener",
+    "query": "Kalshi",
+    "status": "success",
+    "itemsSeen": 1,
+    "itemsCreated": 1,
+    "startedAt": "2026-06-19T21:38:58.177Z",
+    "finishedAt": "2026-06-19T21:38:58.180Z"
+  }
+]
