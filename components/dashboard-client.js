@@ -1,23 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useEffect, useMemo, useState, useTransition } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { SEVERITY_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, statsFor, titleCase, TYPE_OPTIONS } from "@/lib/events";
 import {
-  iconForType,
-  reactionLabel,
-  SEVERITY_OPTIONS,
-  SOURCE_OPTIONS,
-  STATUS_OPTIONS,
-  statsFor,
-  titleCase,
-  TYPE_OPTIONS,
-} from "@/lib/events";
+  eventBreakdown,
+  eventCardMeta,
+  eventDeepDive,
+  eventTimelineLabel,
+  formatEventDate,
+} from "@/lib/event-presentation";
 import { summarizeIngestionRuns } from "@/lib/ingestion";
 
-const tabs = [
+const adminTabs = [
   { id: "public", label: "Court cooked" },
   { id: "watchlist", label: "Fresh cope" },
   { id: "queue", label: "Developing mess" },
+];
+
+const publicTabs = [
+  { id: "public", label: "Public receipts" },
+  { id: "watchlist", label: "Watchlist" },
 ];
 
 const initialFilters = {
@@ -49,130 +52,6 @@ const MODERATION_TAGS = [
   "needs source",
   "publishable",
 ];
-
-function formatDate(value) {
-  if (!value) return "Unpublished";
-  return new Date(value).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function eventBreakdown(event) {
-  const typeCopy = {
-    lawsuit:
-      "This is basically somebody dragging Kalshi into court, which means the issue escaped normal internet yapping and entered real paperwork mode.",
-    legal_loss:
-      "This is the part where Kalshi may have actually taken a courtroom L instead of just farming discourse online.",
-    regulatory:
-      "This is regulator smoke, which usually means grown-ups with actual power are now side-eyeing the operation.",
-    bad_press:
-      "This is a media hit piece or ugly headline cycle, so the brand is getting cooked in public even if no judge swung yet.",
-    pr_incident:
-      "This is more of a chaos-and-backlash moment, where the timeline is clowning them and the optics are doing zero favors.",
-  };
-
-  const severityCopy = {
-    major:
-      "For Kalshi this is not tiny cringe. It can affect trust, legal risk, regulator attention, or whether people start saying the whole thing looks shaky.",
-    notable:
-      "For Kalshi this is mid-to-high turbulence. Not instant doom, but definitely the kind of thing that can snowball if more receipts show up.",
-    minor:
-      "For Kalshi this is more of a contained bruise than an extinction event, but it still belongs on the board if the pattern keeps stacking.",
-  };
-
-  return {
-    whatHappened: typeCopy[event.type],
-    whatItMeans: severityCopy[event.severity],
-  };
-}
-
-function splitCaseTitle(title) {
-  const match = title.match(/^\s*(.+?)\s+v[.\s]\s+(.+?)\s*$/i);
-  if (!match) return null;
-
-  return {
-    plaintiff: match[1].trim(),
-    defendant: match[2].trim(),
-  };
-}
-
-function courtSpecificLead(event) {
-  const sides = splitCaseTitle(event.title);
-  const lowerTitle = event.title.toLowerCase();
-  const kalshiIsDefendant = sides && /kalshi/.test(sides.defendant.toLowerCase());
-  const kalshiIsPlaintiff = sides && /kalshi/.test(sides.plaintiff.toLowerCase());
-
-  if (event.type === "legal_loss") {
-    if (sides && kalshiIsDefendant) {
-      return `${sides.plaintiff} is the party taking Kalshi into court here, and the important wrinkle is that this does not just look like a complaint sitting on a shelf. It reads like some part of the legal fight may already have gone against Kalshi.`;
-    }
-
-    if (sides && kalshiIsPlaintiff) {
-      return `Kalshi is the party that brought this case against ${sides.defendant}, but the ugly part is that the docket language suggests Kalshi may have taken a hit anyway. So this is not just them pressing the attack. It may also be them getting clipped while doing it.`;
-    }
-
-    return `${event.title} looks like more than a mere lawsuit filing. It reads like the docket may reflect some actual courtroom damage for Kalshi, whether that is a denied motion, a bad ruling, or some other procedural L.`;
-  }
-
-  if (sides && kalshiIsDefendant) {
-    return `${sides.plaintiff} appears to be the one suing Kalshi here, so the useful read is not just \"there is a lawsuit\" but \"${sides.plaintiff} is specifically hauling Kalshi into court over this dispute.\"`;
-  }
-
-  if (sides && kalshiIsPlaintiff) {
-    return `Kalshi appears to be the one suing ${sides.defendant} here, which matters because this is not the usual \"someone hit Kalshi with a complaint\" setup. It is Kalshi choosing to litigate, and the question becomes whether the case still creates blowback, scrutiny, or a visible courtroom setback.`;
-  }
-
-  if (lowerTitle.includes("in re ")) {
-    return `${event.title} reads like a named court matter tied to Kalshi, even if the caption is not in the clean plaintiff-versus-defendant format. The key thing is that there is a real legal proceeding here, not just rumor paste.`;
-  }
-
-  return `${event.title} is a real court-linked matter involving Kalshi, but the caption does not spell out the sides in a simple way. So the useful specifics have to come from the docket snippet and source record rather than the case name alone.`;
-}
-
-function eventDeepDive(event) {
-  const timing = event.publishedAt
-    ? `This became public on ${formatDate(event.publishedAt)}, so there is an actual timestamp on when the mess fully surfaced.`
-    : `As of ${formatDate(event.detectedAt)}, this is still sitting in the \"receipts are here but the full public shape is still forming\" phase.`;
-
-  const typeSpecific = {
-    lawsuit:
-      event.sourceType === "court"
-        ? courtSpecificLead(event)
-        : `${event.title} is an actual lawsuit-type situation, meaning this is not just people subtweeting Kalshi. There is real court-paper energy here, with named parties, a venue, and some kind of legal fight that had enough substance to produce a traceable record.`,
-    legal_loss:
-      event.sourceType === "court"
-        ? courtSpecificLead(event)
-        : `${event.title} reads like an actual courtroom setback, not just a complaint existing. The important part is that Kalshi may have gotten clipped on a motion, argument, or ruling that makes its position look weaker than before.`,
-    regulatory: `${event.title} is regulator-lane heat, which usually means an agency, commission, or official oversight structure is somewhere in the frame. That is the kind of thing that can go from \"inside baseball\" to \"oh wait this could actually constrain them\" pretty fast.`,
-    bad_press: `${event.title} is a bad-press story with enough shape to matter beyond one weird corner of the internet. The practical issue is not just embarrassment. It is that the article can harden a broader public narrative that Kalshi is reckless, sketchy, or pushing past normal limits.`,
-    pr_incident: `${event.title} is more of an optics implosion than a courtroom moment. The specifics usually live in screenshots, backlash, or a public reaction cycle where Kalshi now has to explain why people are clowning the move this hard.`,
-  };
-
-  const sourceSpecific = {
-    court: `The sourcing here is court-side, so there is usually a docket, filing, order, or other hard-paper breadcrumb behind the story instead of just somebody freelancing on the timeline.`,
-    regulator: `The sourcing here is regulator-side, which gives it more weight than normal repost chatter because there is some real institution in the loop.`,
-    news: `The sourcing here is media/reporting-side, so the key question is whether the piece brings fresh facts, named sourcing, or real documents instead of just reheating old discourse.`,
-    social: `The sourcing here is social-first, which means the story might still be real, but the specifics need a harder fact check because social platforms are where unsupported spice travels fastest.`,
-    company: `The sourcing here comes through the company lane, so the facts may be partially real while the framing is still doing PR cardio.`,
-  };
-
-  const severitySpecific = {
-    major:
-      "Severity read: this is high-tier turbulence. If the underlying facts hold up, it can affect trust, legal exposure, regulator posture, or the broader narrative that Kalshi is playing too close to the edge.",
-    notable:
-      "Severity read: this is not apocalypse, but it is also not tiny. It is the kind of thing that can stack with other receipts and make the whole company look shakier over time.",
-    minor:
-      "Severity read: this is a smaller bruise for now. On its own it may not nuke anything, but it still matters if it joins a larger pattern of repeated mess.",
-  };
-
-  return [typeSpecific[event.type], event.summary, sourceSpecific[event.sourceType], timing, severitySpecific[event.severity]]
-    .filter(Boolean)
-    .join(" ");
-}
 
 function runQualityLabel(run) {
   if (run.status === "error") return "broken";
@@ -237,6 +116,7 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
   const [selectedId, setSelectedId] = useState(initialEvents[0]?.id || null);
   const [filters, setFilters] = useState(initialFilters);
   const [tab, setTab] = useState("public");
+  const [searchQuery, setSearchQuery] = useState("");
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState("");
   const [ingestQuery, setIngestQuery] = useState(runtimeStatus.defaultCourtListenerQuery || "Kalshi");
@@ -252,6 +132,7 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
     internalNotes: "",
   });
   const [isPending, startUiTransition] = useTransition();
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   useEffect(() => {
     if (!events.find((event) => event.id === selectedId)) {
@@ -265,10 +146,14 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
     }
   }, [runs, selectedRunId]);
 
+  const tabs = admin ? adminTabs : publicTabs;
+
   const availableTags = useMemo(
     () => [...new Set(events.flatMap((event) => event.tags || []))].sort((a, b) => a.localeCompare(b)),
     [events]
   );
+
+  const normalizedSearch = deferredSearchQuery.trim().toLowerCase();
 
   const visibleEvents = useMemo(
     () =>
@@ -276,15 +161,33 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
         .filter((event) => {
           if (tab === "public" && event.status !== "confirmed") return false;
           if (tab === "queue" && event.status !== "review" && event.status !== "developing") return false;
-          if (tab === "watchlist" && !admin && event.status === "rejected") return false;
-          return Object.entries(filters).every(([key, value]) => {
+          if (tab === "watchlist" && !admin && event.status !== "developing") return false;
+          if (tab === "watchlist" && admin && event.status === "rejected") return false;
+
+          const passesFilters = Object.entries(filters).every(([key, value]) => {
             if (value === "all") return true;
             if (key === "tag") return (event.tags || []).includes(value);
             return event[key] === value;
           });
+
+          if (!passesFilters) return false;
+          if (!normalizedSearch) return true;
+
+          const haystack = [
+            event.title,
+            event.summary,
+            event.whyItMatters,
+            event.sourceType,
+            event.type,
+            ...(event.tags || []),
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          return haystack.includes(normalizedSearch);
         })
         .sort((a, b) => new Date(b.publishedAt || b.detectedAt) - new Date(a.publishedAt || a.detectedAt)),
-    [admin, events, filters, tab]
+    [admin, events, filters, normalizedSearch, tab]
   );
 
   const queueEvents = useMemo(
@@ -484,7 +387,7 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
 
           <FilterGroup
             label="Visibility"
-            options={STATUS_OPTIONS}
+            options={admin ? STATUS_OPTIONS : ["confirmed", "developing"]}
             active={filters.status}
             onChange={(value) => setFilters((current) => ({ ...current, status: value }))}
           />
@@ -562,59 +465,89 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
             </div>
           </div>
 
-          <div className="control-strip">
-            <div className="toolbar">
-              <button className="action primary" onClick={() => post("/api/events/actions/seed", {})} type="button">
-                Inject example candidate
-              </button>
-              <button className="action" onClick={() => post("/api/events/actions/reset", {})} type="button">
-                Reset demo data
-              </button>
-            </div>
+          <div className="field search-field">
+            <label htmlFor="feedSearch">{admin ? "Search the full board" : "Search the public receipts"}</label>
+            <input
+              id="feedSearch"
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={admin ? "Search title, summary, tags, source..." : "Search title, summary, tags..."}
+              value={searchQuery}
+            />
+          </div>
 
-            <div className="status-rail">
+          {admin ? (
+            <div className="control-strip">
+              <div className="toolbar">
+                <button className="action primary" onClick={() => post("/api/events/actions/seed", {})} type="button">
+                  Inject example candidate
+                </button>
+                <button className="action" onClick={() => post("/api/events/actions/reset", {})} type="button">
+                  Reset demo data
+                </button>
+              </div>
+
+              <div className="status-rail">
+                <div className="badge-wall">
+                  <span className="micro-badge">Top 8 worst weeks</span>
+                  <span className="micro-badge">Fresh cope</span>
+                  <span className="micro-badge">Docket drama</span>
+                  <span className="micro-badge">PR faceplant</span>
+                </div>
+                {isPending ? <span className="tiny sync-pill">syncing...</span> : null}
+              </div>
+            </div>
+          ) : (
+            <div className="status-rail public-feed-rail">
               <div className="badge-wall">
-                <span className="micro-badge">Top 8 worst weeks</span>
-                <span className="micro-badge">Fresh cope</span>
-                <span className="micro-badge">Docket drama</span>
-                <span className="micro-badge">PR faceplant</span>
+                <span className="micro-badge">confirmed only</span>
+                <span className="micro-badge">receipts over rumors</span>
+                <span className="micro-badge">live source links</span>
               </div>
               {isPending ? <span className="tiny sync-pill">syncing...</span> : null}
             </div>
-          </div>
+          )}
 
           {error ? <div className="notice notice-error">{error}</div> : null}
 
           <div className="feed-list">
             {visibleEvents.length ? (
-              visibleEvents.map((event) => (
-                <article
-                  className={`feed-card selectable-card ${event.id === selected?.id ? "selected" : ""}`}
-                  key={event.id}
-                  onClick={() => setSelectedId(event.id)}
-                >
-                  <div className="feed-top">
-                    <div>
-                      <div className="meta">
-                        <span>{iconForType(event.type)}</span>
-                        <span>{formatDate(event.publishedAt || event.detectedAt)}</span>
+              visibleEvents.map((event) => {
+                const meta = eventCardMeta(event);
+
+                return (
+                  <article
+                    className={`feed-card selectable-card ${event.id === selected?.id ? "selected" : ""}`}
+                    key={event.id}
+                    onClick={() => setSelectedId(event.id)}
+                  >
+                    <div className="feed-top">
+                      <div>
+                        <div className="meta">
+                          <span>{meta.icon}</span>
+                          <span>{formatEventDate(event.publishedAt || event.detectedAt)}</span>
+                        </div>
+                        <h3 className="event-title">{event.title}</h3>
+                        <div className="meta">
+                          <span className={`pill sev-${event.severity}`}>{titleCase(event.severity)}</span>
+                          <span className={`pill status-${event.status}`}>{titleCase(event.status)}</span>
+                          <span>{titleCase(event.sourceType)}</span>
+                          <span>{meta.reaction}</span>
+                        </div>
                       </div>
-                      <h3 className="event-title">{event.title}</h3>
-                      <div className="meta">
-                        <span className={`pill sev-${event.severity}`}>{titleCase(event.severity)}</span>
-                        <span className={`pill status-${event.status}`}>{titleCase(event.status)}</span>
-                        <span>{titleCase(event.sourceType)}</span>
-                        <span>{reactionLabel(event.score)}</span>
+                      <div className="score">
+                        <span className="tiny">Cope</span>
+                        <strong>{event.score}</strong>
                       </div>
                     </div>
-                    <div className="score">
-                      <span className="tiny">Cope</span>
-                      <strong>{event.score}</strong>
-                    </div>
-                  </div>
-                  <p className="tiny">{event.summary}</p>
-                </article>
-              ))
+                    <p className="tiny">{event.summary}</p>
+                    {!admin && event.status === "confirmed" ? (
+                      <div className="card-link-row">
+                        <Link href={`/events/${event.id}`}>Open full receipt</Link>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })
             ) : (
               <EmptyState
                 body="Switch tabs or tweak filters. The machine currently has zero fresh clownery matching this lane."
@@ -632,7 +565,7 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                   <div className="meta">
                     <span className={`pill sev-${selected.severity}`}>{titleCase(selected.severity)}</span>
                     <span className={`pill status-${selected.status}`}>{titleCase(selected.status)}</span>
-                    <span className="pill">{reactionLabel(selected.score)}</span>
+                    <span className="pill">{eventCardMeta(selected).reaction}</span>
                   </div>
                   <h3 className="event-title">{selected.title}</h3>
                 </div>
@@ -667,13 +600,22 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                 </div>
                 <div className="detail-cell">
                   <span>Detected</span>
-                  {formatDate(selected.detectedAt)}
+                  {formatEventDate(selected.detectedAt)}
                 </div>
                 <div className="detail-cell">
                   <span>Published</span>
-                  {formatDate(selected.publishedAt)}
+                  {formatEventDate(selected.publishedAt)}
                 </div>
               </div>
+
+              {!admin ? (
+                <div className="notice notice-secondary">
+                  <strong>Receipt trail:</strong> {eventCardMeta(selected).sourceLabel}
+                  <br />
+                  <br />
+                  <strong>Share page:</strong> <Link href={`/events/${selected.id}`}>Open the full event page</Link>
+                </div>
+              ) : null}
 
               {admin && selected.tags?.length ? (
                 <div className="stack">
@@ -697,21 +639,22 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
               ) : null}
 
               <div className="notice">
-                <strong>Timeline read:</strong> detected {formatDate(selected.detectedAt)} and{" "}
-                {selected.publishedAt ? `pushed public ${formatDate(selected.publishedAt)}.` : "still not public-feed official yet."}
+                <strong>Timeline read:</strong> {eventTimelineLabel(selected)}
               </div>
 
-              <div className="detail-actions">
-                <button className="action primary" onClick={() => patchEvent(selected.id, "confirmed")} type="button">
-                  Approve
-                </button>
-                <button className="action" onClick={() => patchEvent(selected.id, "developing")} type="button">
-                  Mark developing
-                </button>
-                <button className="action danger" onClick={() => patchEvent(selected.id, "rejected")} type="button">
-                  Reject
-                </button>
-              </div>
+              {admin ? (
+                <div className="detail-actions">
+                  <button className="action primary" onClick={() => patchEvent(selected.id, "confirmed")} type="button">
+                    Approve
+                  </button>
+                  <button className="action" onClick={() => patchEvent(selected.id, "developing")} type="button">
+                    Mark developing
+                  </button>
+                  <button className="action danger" onClick={() => patchEvent(selected.id, "rejected")} type="button">
+                    Reject
+                  </button>
+                </div>
+              ) : null}
 
               <div className="badge-wall badge-wall-spaced">
                 <span className="micro-badge">click 4 docket drama</span>
@@ -727,6 +670,12 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                 ) : (
                   "No source URL attached yet."
                 )}
+                {!admin && selected.status === "confirmed" ? (
+                  <>
+                    {" "}
+                    · <Link href={`/events/${selected.id}`}>Standalone page</Link>
+                  </>
+                ) : null}
               </p>
 
               {admin ? (
@@ -829,128 +778,128 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
             />
           )}
 
-          <hr className="divider" />
-
-          <div className="section-title">
-            <div>
-              <h3>Review Queue</h3>
-              <p className="tiny section-subtitle">{queueEvents.length} items need judgement</p>
-            </div>
-          </div>
-          <div className="queue-list">
-              {queueEvents.length ? (
-              queueEvents.map((event) => (
-                <article
-                  className={`queue-card selectable-card ${event.id === selected?.id ? "selected" : ""}`}
-                  key={event.id}
-                  onClick={() => setSelectedId(event.id)}
-                >
-                  <div className="queue-top">
-                    <div>
-                      <div className="meta">
-                        <span>{titleCase(event.type)}</span>
-                        <span>{formatDate(event.detectedAt)}</span>
-                      </div>
-                      <h3 className="event-title queue-title">{event.title}</h3>
-                      <div className="tiny">{reactionLabel(event.score)}</div>
-                    </div>
-                    <span className={`pill sev-${event.severity}`}>{event.score}</span>
-                  </div>
-                </article>
-              ))
-              ) : (
-              <EmptyState title="Queue is weirdly calm" body="No candidates are waiting for the vibe jury right now." />
-              )}
-          </div>
-
-          <hr className="divider" />
-
-            <div className="section-title">
-              <div>
-                <h3>Add Candidate</h3>
-                <p className="tiny section-subtitle">Manual dropbox for edge-case nonsense and cursed headlines.</p>
-              </div>
-            </div>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              await post("/api/events", form);
-              setForm(initialForm);
-            }}
-          >
-            <div className="field">
-              <label htmlFor="title">Title</label>
-              <input
-                id="title"
-                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                value={form.title}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="type">Type</label>
-              <select
-                id="type"
-                onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
-                value={form.type}
-              >
-                {TYPE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {titleCase(option)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="sourceType">Source</label>
-              <select
-                id="sourceType"
-                onChange={(event) => setForm((current) => ({ ...current, sourceType: event.target.value }))}
-                value={form.sourceType}
-              >
-                {SOURCE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {titleCase(option)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="severity">Severity</label>
-              <select
-                id="severity"
-                onChange={(event) => setForm((current) => ({ ...current, severity: event.target.value }))}
-                value={form.severity}
-              >
-                {SEVERITY_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {titleCase(option)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="summary">Summary</label>
-              <textarea
-                id="summary"
-                onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))}
-                value={form.summary}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="sourceUrl">Source URL</label>
-              <input
-                id="sourceUrl"
-                onChange={(event) => setForm((current) => ({ ...current, sourceUrl: event.target.value }))}
-                value={form.sourceUrl}
-              />
-            </div>
-            <button className="action primary" disabled={isPending} type="submit">
-              Queue candidate
-            </button>
-          </form>
-
           {admin ? (
             <>
+              <hr className="divider" />
+
+              <div className="section-title">
+                <div>
+                  <h3>Review Queue</h3>
+                  <p className="tiny section-subtitle">{queueEvents.length} items need judgement</p>
+                </div>
+              </div>
+              <div className="queue-list">
+                {queueEvents.length ? (
+                  queueEvents.map((event) => (
+                    <article
+                      className={`queue-card selectable-card ${event.id === selected?.id ? "selected" : ""}`}
+                      key={event.id}
+                      onClick={() => setSelectedId(event.id)}
+                    >
+                      <div className="queue-top">
+                        <div>
+                          <div className="meta">
+                            <span>{titleCase(event.type)}</span>
+                            <span>{formatEventDate(event.detectedAt)}</span>
+                          </div>
+                          <h3 className="event-title queue-title">{event.title}</h3>
+                          <div className="tiny">{eventCardMeta(event).reaction}</div>
+                        </div>
+                        <span className={`pill sev-${event.severity}`}>{event.score}</span>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <EmptyState title="Queue is weirdly calm" body="No candidates are waiting for the vibe jury right now." />
+                )}
+              </div>
+
+              <hr className="divider" />
+
+              <div className="section-title">
+                <div>
+                  <h3>Add Candidate</h3>
+                  <p className="tiny section-subtitle">Manual dropbox for edge-case nonsense and cursed headlines.</p>
+                </div>
+              </div>
+              <form
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  await post("/api/events", form);
+                  setForm(initialForm);
+                }}
+              >
+                <div className="field">
+                  <label htmlFor="title">Title</label>
+                  <input
+                    id="title"
+                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                    value={form.title}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="type">Type</label>
+                  <select
+                    id="type"
+                    onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
+                    value={form.type}
+                  >
+                    {TYPE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {titleCase(option)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="sourceType">Source</label>
+                  <select
+                    id="sourceType"
+                    onChange={(event) => setForm((current) => ({ ...current, sourceType: event.target.value }))}
+                    value={form.sourceType}
+                  >
+                    {SOURCE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {titleCase(option)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="severity">Severity</label>
+                  <select
+                    id="severity"
+                    onChange={(event) => setForm((current) => ({ ...current, severity: event.target.value }))}
+                    value={form.severity}
+                  >
+                    {SEVERITY_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {titleCase(option)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="summary">Summary</label>
+                  <textarea
+                    id="summary"
+                    onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))}
+                    value={form.summary}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="sourceUrl">Source URL</label>
+                  <input
+                    id="sourceUrl"
+                    onChange={(event) => setForm((current) => ({ ...current, sourceUrl: event.target.value }))}
+                    value={form.sourceUrl}
+                  />
+                </div>
+                <button className="action primary" disabled={isPending} type="submit">
+                  Queue candidate
+                </button>
+              </form>
+
               <hr className="divider" />
               <div className="section-title">
                 <div>
@@ -975,17 +924,13 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                 >
                   <div className="field">
                     <label htmlFor="ingestQuery">CourtListener query</label>
-                    <input
-                      id="ingestQuery"
-                      onChange={(event) => setIngestQuery(event.target.value)}
-                      value={ingestQuery}
-                    />
+                    <input id="ingestQuery" onChange={(event) => setIngestQuery(event.target.value)} value={ingestQuery} />
                   </div>
-                <button className="action primary" disabled={isPending} type="submit">
-                  Run CourtListener now
-                </button>
-              </form>
-              <form
+                  <button className="action primary" disabled={isPending} type="submit">
+                    Run CourtListener now
+                  </button>
+                </form>
+                <form
                   onSubmit={async (event) => {
                     event.preventDefault();
                     await post("/api/ingest/news", { query: newsQuery });
@@ -1051,8 +996,8 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                           <span className="micro-badge">{runQualityLabel(run)}</span>
                         </div>
                         <div className="tiny">
-                          started: {formatDate(run.startedAt)}
-                          {run.finishedAt ? ` | finished: ${formatDate(run.finishedAt)}` : ""}
+                          started: {formatEventDate(run.startedAt)}
+                          {run.finishedAt ? ` | finished: ${formatEventDate(run.finishedAt)}` : ""}
                         </div>
                         {run.errorMessage ? <div className="tiny">error: {run.errorMessage}</div> : null}
                         {run.details?.length ? (
@@ -1083,7 +1028,7 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                       <div>
                         <h3>Run Diagnostics</h3>
                         <p className="tiny section-subtitle">
-                          {selectedRun.query} | {formatDate(selectedRun.startedAt)}
+                          {selectedRun.query} | {formatEventDate(selectedRun.startedAt)}
                         </p>
                       </div>
                     </div>
@@ -1124,7 +1069,8 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                   court lane separate from the news lane stops the board from turning into pure slop.
                 </div>
                 <div className="notice">
-                  Live source mode is currently sniffing with this CourtListener query: <strong>{runtimeStatus.defaultCourtListenerQuery}</strong>
+                  Live source mode is currently sniffing with this CourtListener query:{" "}
+                  <strong>{runtimeStatus.defaultCourtListenerQuery}</strong>
                 </div>
               </div>
             </>

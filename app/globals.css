@@ -541,6 +541,10 @@ textarea {
   resize: vertical;
 }
 
+.search-field {
+  margin-bottom: 16px;
+}
+
 .notice {
   padding: 14px;
   border-style: dashed;
@@ -627,6 +631,10 @@ textarea {
   margin-top: 14px;
 }
 
+.card-link-row a {
+  font-weight: 700;
+}
+
 .run-card {
   display: grid;
   gap: 10px;
@@ -705,6 +713,63 @@ textarea {
   margin-top: 14px;
 }
 
+.public-feed-rail {
+  margin-bottom: 16px;
+}
+
+.event-page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 360px;
+  gap: 20px;
+}
+
+.event-page-main,
+.event-page-side {
+  padding: 24px;
+}
+
+.event-page-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.event-page-title {
+  margin: 12px 0 14px;
+  font-family: Impact, Haettenschweiler, "Arial Black", sans-serif;
+  font-size: clamp(2.2rem, 4vw, 4rem);
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.event-page-summary {
+  font-size: 1.08rem;
+  line-height: 1.65;
+}
+
+.event-copy-section {
+  margin-top: 22px;
+}
+
+.event-copy-section h2 {
+  margin: 0 0 10px;
+  font-family: Impact, Haettenschweiler, "Arial Black", sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.event-copy-section p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.event-detail-grid {
+  margin-bottom: 0;
+}
+
 @keyframes ticker {
   from {
     transform: translateX(0);
@@ -724,7 +789,8 @@ textarea {
 @media (max-width: 1120px) {
   .junkbar,
   .hero,
-  .dashboard {
+  .dashboard,
+  .event-page-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -740,7 +806,9 @@ textarea {
   .sidebar,
   .content,
   .detail,
-  .junk-card {
+  .junk-card,
+  .event-page-main,
+  .event-page-side {
     padding: 16px;
   }
 
@@ -757,6 +825,7 @@ textarea {
     flex-direction: column;
   }
 
+  .event-page-nav,
   .hero-footer,
   .status-rail {
     align-items: flex-start;

@@ -6,3 +6,4 @@ outputs/*
 !outputs/.gitkeep
 work/*
 !work/.gitkeep
+.vercel
