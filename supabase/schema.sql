@@ -10,6 +10,13 @@ create table if not exists public.events (
   source_type text not null,
   source_url text not null default '',
   source_details jsonb not null default '{}'::jsonb,
+  plaintiff text not null default '',
+  defendant text not null default '',
+  court text not null default '',
+  agency text not null default '',
+  docket_number text not null default '',
+  source_published_at timestamptz,
+  legal_posture text not null default '',
   published_at timestamptz,
   detected_at timestamptz not null,
   score integer not null,
@@ -47,6 +54,27 @@ add column if not exists alert_sent_at timestamptz;
 
 alter table public.events
 add column if not exists source_details jsonb not null default '{}'::jsonb;
+
+alter table public.events
+add column if not exists plaintiff text not null default '';
+
+alter table public.events
+add column if not exists defendant text not null default '';
+
+alter table public.events
+add column if not exists court text not null default '';
+
+alter table public.events
+add column if not exists agency text not null default '';
+
+alter table public.events
+add column if not exists docket_number text not null default '';
+
+alter table public.events
+add column if not exists source_published_at timestamptz;
+
+alter table public.events
+add column if not exists legal_posture text not null default '';
 
 alter table public.ingestion_runs
 add column if not exists details jsonb not null default '[]'::jsonb;
