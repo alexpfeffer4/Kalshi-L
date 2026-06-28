@@ -276,6 +276,12 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
     });
   }
 
+  function backfillStructuredFields() {
+    return send("/api/events/actions/backfill-structured", {
+      method: "POST",
+    });
+  }
+
   function saveSelectedEdits(event) {
     event.preventDefault();
     if (!selected) return;
@@ -488,6 +494,9 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                 </button>
                 <button className="action" onClick={() => post("/api/events/actions/reset", {})} type="button">
                   Reset demo data
+                </button>
+                <button className="action" onClick={backfillStructuredFields} type="button">
+                  Normalize structured receipts
                 </button>
               </div>
 
