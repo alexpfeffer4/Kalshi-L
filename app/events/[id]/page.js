@@ -6,6 +6,7 @@ import {
   eventDeepDive,
   eventTimelineLabel,
   formatEventDate,
+  sourceDetailsRows,
 } from "@/lib/event-presentation";
 import { titleCase } from "@/lib/events";
 import { getEvent, listEvents } from "@/lib/store";
@@ -43,6 +44,7 @@ export default async function EventPage({ params }) {
   const breakdown = eventBreakdown(event);
   const meta = eventCardMeta(event);
   const deepDive = eventDeepDive(event);
+  const sourceRows = sourceDetailsRows(event);
 
   return (
     <div className="app-shell">
@@ -124,6 +126,16 @@ export default async function EventPage({ params }) {
           <section className="event-copy-section">
             <h2>Source receipt</h2>
             <p>{meta.sourceLabel}</p>
+            {sourceRows.length ? (
+              <div className="detail-grid event-detail-grid">
+                {sourceRows.map((row) => (
+                  <div className="detail-cell" key={row.label}>
+                    <span>{row.label}</span>
+                    {row.value}
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <p className="card-link-row">
               {event.sourceUrl ? (
                 <a href={event.sourceUrl} rel="noreferrer" target="_blank">

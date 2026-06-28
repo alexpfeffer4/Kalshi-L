@@ -9,6 +9,8 @@ import {
   eventDeepDive,
   eventTimelineLabel,
   formatEventDate,
+  sourceDetailsRows,
+  summarizeSourceDetails,
 } from "@/lib/event-presentation";
 import { summarizeIngestionRuns } from "@/lib/ingestion";
 
@@ -203,6 +205,8 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
   const confirmedCount = events.filter((event) => event.status === "confirmed").length;
   const selectedBreakdown = selected ? eventBreakdown(selected) : null;
   const selectedDeepDive = selected ? eventDeepDive(selected) : null;
+  const selectedSourceRows = selected ? sourceDetailsRows(selected) : [];
+  const selectedSourceSummary = selected ? summarizeSourceDetails(selected) : "";
   const selectedRun = runs.find((run) => run.id === selectedRunId) || runs[0] || null;
   const selectedRunDetails = useMemo(() => {
     if (!selectedRun?.details?.length) return [];
@@ -590,6 +594,10 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                 <strong>Deep dive:</strong> {selectedDeepDive}
               </div>
 
+              <div className="notice notice-secondary">
+                <strong>Structured receipt:</strong> {selectedSourceSummary}
+              </div>
+
               <div className="detail-grid">
                 <div className="detail-cell">
                   <span>Type</span>
@@ -608,6 +616,17 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                   {formatEventDate(selected.publishedAt)}
                 </div>
               </div>
+
+              {selectedSourceRows.length ? (
+                <div className="detail-grid ingestion-summary-grid">
+                  {selectedSourceRows.map((row) => (
+                    <div className="detail-cell" key={row.label}>
+                      <span>{row.label}</span>
+                      {row.value}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
               {!admin ? (
                 <div className="notice notice-secondary">

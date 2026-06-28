@@ -9,6 +9,7 @@ create table if not exists public.events (
   alert_sent_at timestamptz,
   source_type text not null,
   source_url text not null default '',
+  source_details jsonb not null default '{}'::jsonb,
   published_at timestamptz,
   detected_at timestamptz not null,
   score integer not null,
@@ -43,6 +44,9 @@ add column if not exists internal_notes text not null default '';
 
 alter table public.events
 add column if not exists alert_sent_at timestamptz;
+
+alter table public.events
+add column if not exists source_details jsonb not null default '{}'::jsonb;
 
 alter table public.ingestion_runs
 add column if not exists details jsonb not null default '[]'::jsonb;
