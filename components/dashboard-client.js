@@ -31,6 +31,7 @@ const initialFilters = {
   severity: "all",
   sourceType: "all",
   tag: "all",
+  quality: "all",
 };
 
 const initialForm = {
@@ -83,6 +84,30 @@ function parseTags(value) {
   return [...new Set(value.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
 }
 
+function hasGenericCourtCopy(event) {
+  if (event.sourceType !== "court") return false;
+  const details = event.sourceDetails || {};
+  const summary = (event.summary || "").toLowerCase();
+  const why = (event.whyItMatters || "").toLowerCase();
+  return (
+    !details.caseOverview ||
+    !details.extractionConfidence ||
+    summary.includes("courtlistener surfaced") ||
+    why.includes("court-sourced candidate imported from courtlistener") ||
+    (!event.plaintiff && !details.plaintiff)
+  );
+}
+
+function matchesQualityFilter(event, quality) {
+  if (quality === "all") return true;
+  const details = event.sourceDetails || {};
+  if (quality === "generic") return hasGenericCourtCopy(event);
+  if (quality === "high_confidence") return details.extractionConfidence === "high";
+  if (quality === "medium_confidence") return details.extractionConfidence === "medium";
+  if (quality === "low_confidence") return details.extractionConfidence === "low" || !details.extractionConfidence;
+  return true;
+}
+
 function FilterGroup({ label, options, active, onChange }) {
   return (
     <div className="stack filter-block">
@@ -128,6 +153,8 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
   const [regulatorQuery, setRegulatorQuery] = useState(runtimeStatus.defaultRegulatorQuery || "Kalshi");
   const [selectedRunId, setSelectedRunId] = useState(initialRuns[0]?.id || null);
   const [runOutcomeFilter, setRunOutcomeFilter] = useState("all");
+  const [enrichmentPreview, setEnrichmentPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [editForm, setEditForm] = useState({
     title: "",
     summary: "",
@@ -172,6 +199,7 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
           const passesFilters = Object.entries(filters).every(([key, value]) => {
             if (value === "all") return true;
             if (key === "tag") return (event.tags || []).includes(value);
+            if (key === "quality") return matchesQualityFilter(event, value);
             return event[key] === value;
           });
 
@@ -226,6 +254,10 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
       internalNotes: selected.internalNotes || "",
     });
   }, [selected]);
+
+  useEffect(() => {
+    setEnrichmentPreview(null);
+  }, [selected?.id]);
 
   useEffect(() => {
     if (!admin || !selected?.id) return;
@@ -327,6 +359,47 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
     return send("/api/events/actions/enrich-court-docs", {
       method: "POST",
     });
+  }
+
+  async function previewCourtEnrichment() {
+    if (!selected || selected.sourceType !== "court") return;
+    setPreviewLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/events/${selected.id}/enrich-preview`, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Could not load enrichment preview.");
+      }
+      const payload = await response.json();
+      setEnrichmentPreview(payload);
+    } catch (requestError) {
+      setError(requestError.message || "Something broke.");
+      setEnrichmentPreview(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  async function applyCourtEnrichment() {
+    if (!selected || selected.sourceType !== "court") return;
+    setPreviewLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/events/${selected.id}/enrich-preview`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Could not apply enrichment.");
+      }
+      setEnrichmentPreview(null);
+      await refresh();
+    } catch (requestError) {
+      setError(requestError.message || "Something broke.");
+    } finally {
+      setPreviewLoading(false);
+    }
   }
 
   function saveSelectedEdits(event) {
@@ -473,6 +546,14 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
               options={availableTags}
               active={filters.tag}
               onChange={(value) => setFilters((current) => ({ ...current, tag: value }))}
+            />
+          ) : null}
+          {admin ? (
+            <FilterGroup
+              label="Copy quality"
+              options={["generic", "high_confidence", "medium_confidence", "low_confidence"]}
+              active={filters.quality}
+              onChange={(value) => setFilters((current) => ({ ...current, quality: value }))}
             />
           ) : null}
 
@@ -727,6 +808,16 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                 <strong>Timeline read:</strong> {eventTimelineLabel(selected)}
               </div>
 
+              {admin && selected.sourceType === "court" ? (
+                <div className="notice notice-secondary">
+                  <strong>Extraction confidence:</strong>{" "}
+                  {(selected.sourceDetails?.extractionConfidence || "unknown").replace("_", " ")}
+                  <br />
+                  <strong>Parser reason:</strong>{" "}
+                  {selected.sourceDetails?.extractionReason || "This court row has not been re-read through the newer extractor yet."}
+                </div>
+              ) : null}
+
               {admin ? (
                 <div className="detail-actions">
                   <button className="action primary" onClick={() => patchEvent(selected.id, "confirmed")} type="button">
@@ -739,6 +830,50 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                     Reject
                   </button>
                 </div>
+              ) : null}
+
+              {admin && selected.sourceType === "court" ? (
+                <>
+                  <div className="detail-actions">
+                    <button className="action" disabled={previewLoading} onClick={previewCourtEnrichment} type="button">
+                      {previewLoading ? "Loading preview..." : "Preview court enrichment"}
+                    </button>
+                    <button
+                      className="action primary"
+                      disabled={previewLoading || !enrichmentPreview?.preview}
+                      onClick={applyCourtEnrichment}
+                      type="button"
+                    >
+                      Apply preview to this case
+                    </button>
+                  </div>
+                  {enrichmentPreview ? (
+                    <div className="notice">
+                      <strong>Enrichment preview</strong>
+                      <br />
+                      confidence: {enrichmentPreview.confidence || "unknown"}
+                      <br />
+                      reason: {enrichmentPreview.reason || "No reason returned."}
+                      {enrichmentPreview.diff?.length ? (
+                        <div className="stack run-detail-list run-detail-list-expanded">
+                          {enrichmentPreview.diff.map((row) => (
+                            <div className="detail-cell run-detail-item" key={row.key}>
+                              <span>{row.key}</span>
+                              <div className="tiny">
+                                <strong>Before:</strong> {row.before || "(empty)"}
+                              </div>
+                              <div className="tiny">
+                                <strong>After:</strong> {row.after || "(empty)"}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="tiny">No field changes are proposed for this case.</p>
+                      )}
+                    </div>
+                  ) : null}
+                </>
               ) : null}
 
               {admin ? (
