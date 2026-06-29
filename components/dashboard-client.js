@@ -323,6 +323,12 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
     });
   }
 
+  function enrichCourtDocs() {
+    return send("/api/events/actions/enrich-court-docs", {
+      method: "POST",
+    });
+  }
+
   function saveSelectedEdits(event) {
     event.preventDefault();
     if (!selected) return;
@@ -544,6 +550,9 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                 </button>
                 <button className="action" onClick={backfillStructuredFields} type="button">
                   Normalize structured receipts
+                </button>
+                <button className="action" onClick={enrichCourtDocs} type="button">
+                  Read court docs into cases
                 </button>
               </div>
 
