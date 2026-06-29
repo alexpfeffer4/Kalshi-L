@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { enrichCourtEventFromCourtListener } from "@/lib/courtlistener";
+import { previewCourtEventEnrichment } from "@/lib/courtlistener";
 import { getEvent, recordEventAuditLog, updateEvent } from "@/lib/store";
 
 function buildDiff(current, patch) {
@@ -39,7 +39,8 @@ export async function GET(_request, context) {
     return NextResponse.json({ ok: true, event, preview: null, diff: [], reason: "Only court events support this preview." });
   }
 
-  const preview = await enrichCourtEventFromCourtListener(event);
+  const result = await previewCourtEventEnrichment(event);
+  const preview = result?.preview || null;
   const diff = preview ? buildDiff(event, preview) : [];
 
   return NextResponse.json({
@@ -47,8 +48,9 @@ export async function GET(_request, context) {
     event,
     preview,
     diff,
-    confidence: preview?.sourceDetails?.extractionConfidence || "",
-    reason: preview?.sourceDetails?.extractionReason || "",
+    confidence: result?.confidence || "",
+    reason: result?.reason || "",
+    attempts: result?.attempts || [],
   });
 }
 
@@ -65,9 +67,10 @@ export async function POST(_request, context) {
     return NextResponse.json({ error: "Only court events support enrichment." }, { status: 400 });
   }
 
-  const preview = await enrichCourtEventFromCourtListener(event);
+  const result = await previewCourtEventEnrichment(event);
+  const preview = result?.preview || null;
   if (!preview) {
-    return NextResponse.json({ ok: false, error: "No confident CourtListener match was found." }, { status: 422 });
+    return NextResponse.json({ ok: false, error: result?.reason || "No confident CourtListener match was found." }, { status: 422 });
   }
 
   const updated = await updateEvent(id, preview);
@@ -87,7 +90,7 @@ export async function POST(_request, context) {
   return NextResponse.json({
     ok: true,
     event: updated,
-    confidence: preview?.sourceDetails?.extractionConfidence || "",
-    reason: preview?.sourceDetails?.extractionReason || "",
+    confidence: result?.confidence || "",
+    reason: result?.reason || "",
   });
 }
