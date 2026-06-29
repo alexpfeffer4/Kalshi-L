@@ -43,6 +43,17 @@ create table if not exists public.ingestion_runs (
   finished_at timestamptz
 );
 
+create table if not exists public.event_audit_logs (
+  id bigserial primary key,
+  event_id text not null references public.events(id) on delete cascade,
+  action text not null,
+  actor text not null default 'admin',
+  from_status text,
+  to_status text,
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 alter table public.events
 add column if not exists tags text[] not null default '{}';
 
@@ -79,10 +90,14 @@ add column if not exists legal_posture text not null default '';
 alter table public.ingestion_runs
 add column if not exists details jsonb not null default '[]'::jsonb;
 
+alter table public.event_audit_logs
+add column if not exists details jsonb not null default '{}'::jsonb;
+
 create index if not exists events_status_idx on public.events (status);
 create index if not exists events_detected_at_idx on public.events (detected_at desc);
 create index if not exists events_fingerprint_idx on public.events (fingerprint);
 create index if not exists events_tags_idx on public.events using gin (tags);
+create index if not exists event_audit_logs_event_id_idx on public.event_audit_logs (event_id, created_at desc);
 
 create or replace function public.set_updated_at()
 returns trigger

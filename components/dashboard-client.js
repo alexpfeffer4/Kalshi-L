@@ -116,6 +116,8 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
   const [events, setEvents] = useState(initialEvents);
   const [runs, setRuns] = useState(initialRuns);
   const [selectedId, setSelectedId] = useState(initialEvents[0]?.id || null);
+  const [selectedQueueIds, setSelectedQueueIds] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [filters, setFilters] = useState(initialFilters);
   const [tab, setTab] = useState("public");
   const [searchQuery, setSearchQuery] = useState("");
@@ -225,6 +227,29 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
     });
   }, [selected]);
 
+  useEffect(() => {
+    if (!admin || !selected?.id) return;
+
+    let cancelled = false;
+
+    async function loadAuditLogs() {
+      try {
+        const response = await fetch(`/api/events/${selected.id}/history`, { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (!cancelled) setAuditLogs(payload.logs || []);
+      } catch {
+        if (!cancelled) setAuditLogs([]);
+      }
+    }
+
+    loadAuditLogs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [admin, selected?.id]);
+
   async function refresh() {
     const [eventsResponse, runsResponse] = await Promise.all([
       fetch("/api/events", { cache: "no-store" }),
@@ -273,6 +298,22 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
+    });
+  }
+
+  function toggleQueueSelection(id) {
+    setSelectedQueueIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  function runBulkModeration(action) {
+    const ids = selectedQueueIds.length ? selectedQueueIds : selected ? [selected.id] : [];
+    if (!ids.length) return;
+
+    setSelectedQueueIds([]);
+    return send("/api/events/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, action }),
     });
   }
 
@@ -441,6 +482,12 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
             storage: <strong>{runtimeStatus.storageMode}</strong>
             <br />
             courtlistener token: <strong>{runtimeStatus.hasCourtListenerToken ? "present" : "missing"}</strong>
+            {runtimeStatus.loadWarning ? (
+              <>
+                <br />
+                warning: {runtimeStatus.loadWarning}
+              </>
+            ) : null}
             {runtimeStatus.hasSupabase ? null : (
               <>
                 <br />
@@ -685,6 +732,38 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                 </div>
               ) : null}
 
+              {admin ? (
+                <>
+                  <div className="section-title">
+                    <div>
+                      <h3>History</h3>
+                      <p className="tiny section-subtitle">Recent moderation and edit actions for this event.</p>
+                    </div>
+                  </div>
+                  <div className="queue-list">
+                    {auditLogs.length ? (
+                      auditLogs.map((log) => (
+                        <article className="queue-card" key={log.id}>
+                          <div className="queue-top">
+                            <div>
+                              <div className="meta">
+                                <span>{titleCase(log.action.replace("status:", ""))}</span>
+                                <span>{formatEventDate(log.createdAt)}</span>
+                              </div>
+                              <div className="tiny">
+                                {log.fromStatus || "unknown"} to {log.toStatus || "unknown"}
+                              </div>
+                            </div>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <EmptyState title="No history yet" body="This event does not have any moderation history recorded yet." />
+                    )}
+                  </div>
+                </>
+              ) : null}
+
               <div className="badge-wall badge-wall-spaced">
                 <span className="micro-badge">click 4 docket drama</span>
                 <span className="micro-badge">outside counsel cope</span>
@@ -816,6 +895,17 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                   <h3>Review Queue</h3>
                   <p className="tiny section-subtitle">{queueEvents.length} items need judgement</p>
                 </div>
+                <div className="toolbar">
+                  <button className="action primary" onClick={() => runBulkModeration("approve")} type="button">
+                    Approve selected
+                  </button>
+                  <button className="action" onClick={() => runBulkModeration("duplicate")} type="button">
+                    Mark duplicate
+                  </button>
+                  <button className="action danger" onClick={() => runBulkModeration("noise")} type="button">
+                    Reject noise
+                  </button>
+                </div>
               </div>
               <div className="queue-list">
                 {queueEvents.length ? (
@@ -826,6 +916,13 @@ export default function DashboardClient({ initialEvents, initialRuns = [], runti
                       onClick={() => setSelectedId(event.id)}
                     >
                       <div className="queue-top">
+                        <input
+                          aria-label={`Select ${event.title}`}
+                          checked={selectedQueueIds.includes(event.id)}
+                          onChange={() => toggleQueueSelection(event.id)}
+                          onClick={(clickEvent) => clickEvent.stopPropagation()}
+                          type="checkbox"
+                        />
                         <div>
                           <div className="meta">
                             <span>{titleCase(event.type)}</span>
